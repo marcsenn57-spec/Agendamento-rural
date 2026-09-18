@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Agendamento da Saúde - Firebase</title>
+    <!-- PDF Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #f4f6f9;
+            color: #333;
+            padding: 20px;
+        }
+        .container {
+            max-width: 950px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .tabs {
+            display: flex;
+            background-color: #e9ecef;
+            border-bottom: 1px solid #ccc;
+        }
+        .tab-button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            color: #495057;
+            transition: 0.3s;
+        }
+        .tab-button.active {
+            background-color: #ffffff;
+            color: #007bff;
+            border-bottom: 3px solid #007bff;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button.btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        button.btn:hover { background-color: #218838; }
+        button.btn-blue { background-color: #007bff; }
+        button.btn-blue:hover { background-color: #0069d9; }
+        button.btn-warning { background-color: #ffc107; color: #212529; }
+        button.btn-warning:hover { background-color: #e0a800; }
+        button.btn-danger { background-color: #dc3545; color: white; }
+        button.btn-danger:hover { background-color: #c82333; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            text-align: left;
+            font-size: 14px;
+        }
+        th { background-color: #f8f9fa; }
+        .input-inline { padding: 6px; font-size: 12px; }
+        .login-box {
+            max-width: 350px;
+            margin: 30px auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f8f9fa;
+            text-align: center;
+        }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .filter-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .filter-item {
+            flex: 1;
+            min-width: 200px;
+        }
+        .actions-bar { display: flex; gap: 10px; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 450px;
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 4px;
+        }
+        .status-bar {
+            padding: 8px 12px;
+            background: #e2e3e5;
+            font-size: 12px;
+            color: #383d41;
+            border-bottom: 1px solid #d6d8db;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h2>Gestão de Agendamentos - Saúde (Nuvem)</h2>
+    </header>
+    
+    <div id="status-firebase" class="status-bar">Conectando ao banco de dados...</div>
+
+    <div class="tabs">
+        <button class="tab-button active" onclick="openTab(event, 'cadastro')">📝 Solicitar Atendimento (Agente)</button>
+        <button class="tab-button" onclick="openTab(event, 'confirmacao')">🔒 Confirmar Agendamentos (ADM)</button>
+        <button class="tab-button" onclick="openTab(event, 'relatorios')">📄 Relatório Final</button>
+    </div>
+
+    <!-- ABA 1: CADASTRO -->
+    <div id="cadastro" class="tab-content active">
+        <h3>Nova Solicitação (Agente de Saúde)</h3>
+        <br>
+        <div class="form-group">
+            <label>Nome do Agente de Saúde:</label>
+            <input type="text" id="agente" placeholder="Ex: João Silva">
+        </div>
+        <div class="form-group">
+            <label>Nome do Paciente:</label>
+            <input type="text" id="paciente" placeholder="Ex: Maria de Souza">
+        </div>
+        <div class="form-group">
+            <label>Observação / Necessidade:</label>
+            <textarea id="observacao" rows="3" placeholder="Ex: Paciente idosa, precisa de curativo"></textarea>
+        </div>
+        <button class="btn" onclick="adicionarSolicitacao()">➕ Adicionar Paciente</button>
+    </div>
+
+    <!-- ABA 2: CONFIRMAÇÃO (RESTRITA) -->
+    <div id="confirmacao" class="tab-content">
+        <div id="painel-login" class="login-box">
+            <h4>Acesso Restrito ao Administrador</h4>
+            <br>
+            <div class="form-group">
+                <input type="password" id="senha-adm" placeholder="Digite a senha de ADM">
+            </div>
+            <button class="btn btn-blue" onclick="autenticarADM()">Entrar</button>
+        </div>
+
+        <div id="painel-adm" style="display: none;">
+            <div class="admin-header">
+                <h3>Painel do Administrador - Confirmar Agendamentos</h3>
+                <button class="btn btn-danger" style="padding: 5px 10px; font-size: 12px;" onclick="logoutADM()">🔒 Sair da ADM</button>
+            </div>
+            
+            <div class="filter-container">
+                <div class="filter-item">
+                    <label>🔍 Buscar Paciente:</label>
+                    <input type="text" id="busca-paciente-pendente" placeholder="Digite o nome do paciente..." oninput="renderizarTabelaPendentes()">
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Agente</th>
+                        <th>Paciente</th>
+                        <th>Observação</th>
+                        <th>Data/Hora Atendimento</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="tabela-pendentes">
+                    <!-- Preenchido via Firebase -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ABA 3: RELATÓRIOS -->
+    <div id="relatorios" class="tab-content">
+        <h3>Pacientes com Data Agendada</h3>
+        <br>
+        
+        <div class="filter-container">
+            <div class="filter-item">
+                <label>Filtrar por Agente:</label>
+                <select id="filtro-agente" onchange="renderizarTabelaConfirmados()">
+                    <option value="TODOS">-- Todos os Agentes (Geral) --</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label>🔍 Buscar Paciente:</label>
+                <input type="text" id="busca-paciente-confirmado" placeholder="Digite o nome do paciente..." oninput="renderizarTabelaConfirmados()">
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Data/Hora</th>
+                    <th>Agente</th>
+                    <th>Paciente</th>
+                    <th>Observação</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="tabela-confirmados">
+                <!-- Preenchido via Firebase -->
+            </tbody>
+        </table>
+        <br>
+        <div class="actions-bar">
+            <button class="btn btn-danger" onclick="gerarRelatorioPDF()">📄 Gerar Relatório em PDF</button>
+            <button class="btn btn-blue" onclick="baixarRelatorioTXT()">💾 Baixar em Texto (.txt)</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAIS -->
+<div id="modal-editar-solicitacao" class="modal">
+    <div class="modal-content">
+        <h3>Editar Solicitação Pendente</h3>
+        <br>
+        <input type="hidden" id="edit-solicitacao-id">
+        <div class="form-group">
+            <label>Nome do Agente:</label>
+            <input type="text" id="edit-solicitacao-agente">
+        </div>
+        <div class="form-group">
+            <label>Nome do Paciente:</label>
+            <input type="text" id="edit-solicitacao-paciente">
+        </div>
+        <div class="form-group">
+            <label>Observação:</label>
+            <textarea id="edit-solicitacao-obs" rows="3"></textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-danger" onclick="fecharModalSolicitacao()">Cancelar</button>
+            <button class="btn" onclick="salvarEdicaoSolicitacao()">Salvar Alterações</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-editar" class="modal">
+    <div class="modal-content">
+        <h3>Editar Agendamento Confirmado</h3>
+        <br>
+        <input type="hidden" id="edit-id">
+        <div class="form-group">
+            <label>Data/Hora Atendimento:</label>
+            <input type="text" id="edit-data">
+        </div>
+        <div class="form-group">
+            <label>Nome do Agente:</label>
+            <input type="text" id="edit-agente">
+        </div>
+        <div class="form-group">
+            <label>Nome do Paciente:</label>
+            <input type="text" id="edit-paciente">
+        </div>
+        <div class="form-group">
+            <label>Observação:</label>
+            <textarea id="edit-obs" rows="3"></textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-danger" onclick="fecharModal()">Cancelar</button>
+            <button class="btn" onclick="salvarEdicao()">Salvar Alterações</button>
+        </div>
+    </div>
+</div>
+
+<!-- FIREBASE SCRIPT -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { 
+        getFirestore, 
+        collection, 
+        addDoc, 
+        onSnapshot, 
+        doc, 
+        updateDoc, 
+        deleteDoc,
+        enableIndexedDbPersistence
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBJFLNEp9YAjqCtI1A03WhkY_nl628Xb5Q",
+        authDomain: "agendamento-rural.firebaseapp.com",
+        databaseURL: "https://agendamento-rural-default-rtdb.firebaseio.com",
+        projectId: "agendamento-rural",
+        storageBucket: "agendamento-rural.firebasestorage.app",
+        messagingSenderId: "1076680065548",
+        appId: "1:1076680065548:web:3c3ddac5556d6320df6429",
+        measurementId: "G-ZELV3G962K"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Ativar persistência de dados local
+    enableIndexedDbPersistence(db).catch((err) => {
+        if (err.code === 'failed-precondition') {
+            console.warn('Persistência falhou: Múltiplas abas abertas.');
+        } else if (err.code === 'unimplemented') {
+            console.warn('O navegador não suporta persistência local.');
+        }
+    });
+
+    window.solicitacoesList = [];
+    window.agendamentosList = [];
+
+    const statusBar = document.getElementById('status-firebase');
+
+    // Escutar solicitações pendentes
+    onSnapshot(collection(db, "solicitacoes"), (snapshot) => {
+        statusBar.innerText = "🟢 Conectado ao Firebase - Dados em tempo real sincronizados.";
+        statusBar.style.background = "#d4edda";
+        statusBar.style.color = "#155724";
+
+        window.solicitacoesList = [];
+        snapshot.forEach((docSnap) => {
+            window.solicitacoesList.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        window.renderizarTabelaPendentes();
+    }, (error) => {
+        statusBar.innerText = "🔴 ERRO: As Regras do Firestore estão bloqueando a gravação! Altere as regras para 'allow read, write: if true;'.";
+        statusBar.style.background = "#f8d7da";
+        statusBar.style.color = "#721c24";
+        console.error("Erro Firebase:", error);
+    });
+
+    // Escutar agendamentos confirmados
+    onSnapshot(collection(db, "agendamentos"), (snapshot) => {
+        window.agendamentosList = [];
+        snapshot.forEach((docSnap) => {
+            window.agendamentosList.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        window.atualizarFiltroAgentes();
+        window.renderizarTabelaConfirmados();
+    });
+
+    window.adicionarSolicitacao = async function() {
+        const agenteInput = document.getElementById('agente');
+        const pacienteInput = document.getElementById('paciente');
+        const obsInput = document.getElementById('observacao');
+
+        const agente = agenteInput.value.trim();
+        const paciente = pacienteInput.value.trim();
+        const observacao = obsInput.value.trim();
+
+        if (!agente || !paciente) {
+            alert('Por favor, preencha o nome do Agente e do Paciente.');
+            return;
+        }
+
+        try {
+            await addDoc(collection(db, "solicitacoes"), {
+                agente: agente,
+                paciente: paciente,
+                observacao: observacao,
+                criadoEm: new Date().toISOString()
+            });
+            alert('Paciente salvo e sincronizado na nuvem!');
+            agenteInput.value = '';
+            pacienteInput.value = '';
+            obsInput.value = '';
+        } catch (e) {
+            alert("Erro ao salvar: " + e.message);
+        }
+    };
+
+    window.confirmarAgendamento = async function(id) {
+        const inputData = document.getElementById(`data-${id}`).value.trim();
+        if (!inputData) {
+            alert('Por favor, informe a data e hora do atendimento.');
+            return;
+        }
+
+        const item = window.solicitacoesList.find(s => s.id === id);
+        if (!item) return;
+
+        try {
+            await addDoc(collection(db, "agendamentos"), {
+                agente: item.agente,
+                paciente: item.paciente,
+                observacao: item.observacao,
+                data_atendimento: inputData,
+                confirmadoEm: new Date().toISOString()
+            });
+            await deleteDoc(doc(db, "solicitacoes", id));
+            alert('Agendamento confirmado!');
+        } catch (e) {
+            alert("Erro ao confirmar: " + e.message);
+        }
+    };
+
+    window.salvarEdicaoSolicitacao = async function() {
+        const id = document.getElementById('edit-solicitacao-id').value;
+        try {
+            await updateDoc(doc(db, "solicitacoes", id), {
+                agente: document.getElementById('edit-solicitacao-agente').value.trim(),
+                paciente: document.getElementById('edit-solicitacao-paciente').value.trim(),
+                observacao: document.getElementById('edit-solicitacao-obs').value.trim()
+            });
+            window.fecharModalSolicitacao();
+            alert('Solicitação atualizada!');
+        } catch (e) {
+            alert("Erro ao editar: " + e.message);
+        }
+    };
+
+    window.excluirSolicitacao = async function(id) {
+        if (confirm('Deseja excluir esta solicitação?')) {
+            try {
+                await deleteDoc(doc(db, "solicitacoes", id));
+            } catch (e) {
+                alert("Erro ao excluir: " + e.message);
+            }
+        }
+    };
+
+    window.salvarEdicao = async function() {
+        const id = document.getElementById('edit-id').value;
+        try {
+            await updateDoc(doc(db, "agendamentos", id), {
+                data_atendimento: document.getElementById('edit-data').value.trim(),
+                agente: document.getElementById('edit-agente').value.trim(),
+                paciente: document.getElementById('edit-paciente').value.trim(),
+                observacao: document.getElementById('edit-obs').value.trim()
+            });
+            window.fecharModal();
+            alert('Agendamento atualizado!');
+        } catch (e) {
+            alert("Erro ao editar: " + e.message);
+        }
+    };
+
+    window.excluirAgendamento = async function(id) {
+        if (confirm('Tem certeza que deseja excluir este agendamento?')) {
+            try {
+                await deleteDoc(doc(db, "agendamentos", id));
+            } catch (e) {
+                alert("Erro ao excluir: " + e.message);
+            }
+        }
+    };
+</script>
+
+<!-- SCRIPTS DE INTERFACE -->
+<script>
+    const SENHA_ADM = "1234";
+    let isAdminAutenticado = false;
+
+    function openTab(evt, tabName) {
+        let tabContents = document.getElementsByClassName("tab-content");
+        for (let i = 0; i < tabContents.length; i++) {
+            tabContents[i].classList.remove("active");
+        }
+        let tabButtons = document.getElementsByClassName("tab-button");
+        for (let i = 0; i < tabButtons.length; i++) {
+            tabButtons[i].classList.remove("active");
+        }
+        document.getElementById(tabName).classList.add("active");
+        evt.currentTarget.classList.add("active");
+    }
+
+    function autenticarADM() {
+        const senhaDigitada = document.getElementById('senha-adm').value;
+        if (senhaDigitada === SENHA_ADM) {
+            isAdminAutenticado = true;
+            document.getElementById('painel-login').style.display = 'none';
+            document.getElementById('painel-adm').style.display = 'block';
+            document.getElementById('senha-adm').value = '';
+            renderizarTabelaPendentes();
+        } else {
+            alert('Senha incorreta!');
+        }
+    }
+
+    function logoutADM() {
+        isAdminAutenticado = false;
+        document.getElementById('painel-login').style.display = 'block';
+        document.getElementById('painel-adm').style.display = 'none';
+    }
+
+    function renderizarTabelaPendentes() {
+        if (!isAdminAutenticado) return;
+
+        const tbodyPendentes = document.getElementById('tabela-pendentes');
+        tbodyPendentes.innerHTML = '';
+
+        if (!window.solicitacoesList || window.solicitacoesList.length === 0) {
+            tbodyPendentes.innerHTML = '<tr><td colspan="5">Nenhuma solicitação pendente.</td></tr>';
+            return;
+        }
+
+        const termoBusca = (document.getElementById('busca-paciente-pendente')?.value || '').toLowerCase().trim();
+        const listagemFiltrada = window.solicitacoesList.filter(item => 
+            item.paciente.toLowerCase().includes(termoBusca)
+        );
+
+        if (listagemFiltrada.length === 0) {
+            tbodyPendentes.innerHTML = '<tr><td colspan="5">Nenhum paciente encontrado com essa busca.</td></tr>';
+            return;
+        }
+
+        listagemFiltrada.forEach((item) => {
+            tbodyPendentes.innerHTML += `
+                <tr>
+                    <td>${item.agente}</td>
+                    <td>${item.paciente}</td>
+                    <td>${item.observacao || '-'}</td>
+                    <td>
+                        <input type="text" id="data-${item.id}" class="input-inline" placeholder="Ex: 25/10 09:00">
+                    </td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="confirmarAgendamento('${item.id}')">Confirmar</button>
+                            <button class="btn btn-warning" style="padding: 4px 8px; font-size: 12px;" onclick="abrirModalEditarSolicitacao('${item.id}')">✏️ Editar</button>
+                            <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="excluirSolicitacao('${item.id}')">🗑️ Excluir</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function abrirModalEditarSolicitacao(id) {
+        const item = window.solicitacoesList.find(s => s.id === id);
+        if (!item) return;
+
+        document.getElementById('edit-solicitacao-id').value = id;
+        document.getElementById('edit-solicitacao-agente').value = item.agente;
+        document.getElementById('edit-solicitacao-paciente').value = item.paciente;
+        document.getElementById('edit-solicitacao-obs').value = item.observacao || '';
+        document.getElementById('modal-editar-solicitacao').style.display = 'flex';
+    }
+
+    function fecharModalSolicitacao() {
+        document.getElementById('modal-editar-solicitacao').style.display = 'none';
+    }
+
+    function atualizarFiltroAgentes() {
+        const select = document.getElementById('filtro-agente');
+        const valorSelecionado = select.value;
+        if (!window.agendamentosList) return;
+
+        const agentesUnicos = [...new Set(window.agendamentosList.map(item => item.agente))];
+        select.innerHTML = '<option value="TODOS">-- Todos os Agentes (Geral) --</option>';
+        agentesUnicos.forEach(agente => {
+            select.innerHTML += `<option value="${agente}">${agente}</option>`;
+        });
+        select.value = valorSelecionado;
+    }
+
+    function renderizarTabelaConfirmados() {
+        const tbodyConfirmados = document.getElementById('tabela-confirmados');
+        tbodyConfirmados.innerHTML = '';
+
+        if (!window.agendamentosList) return;
+
+        const agenteSelecionado = document.getElementById('filtro-agente').value;
+        const termoBusca = (document.getElementById('busca-paciente-confirmado')?.value || '').toLowerCase().trim();
+
+        let listagem = window.agendamentosList;
+        if (agenteSelecionado !== "TODOS") {
+            listagem = listagem.filter(item => item.agente === agenteSelecionado);
+        }
+        if (termoBusca) {
+            listagem = listagem.filter(item => item.paciente.toLowerCase().includes(termoBusca));
+        }
+
+        if (listagem.length === 0) {
+            tbodyConfirmados.innerHTML = '<tr><td colspan="5">Nenhum agendamento encontrado.</td></tr>';
+            return;
+        }
+
+        listagem.forEach((item) => {
+            tbodyConfirmados.innerHTML += `
+                <tr>
+                    <td><strong>${item.data_atendimento}</strong></td>
+                    <td>${item.agente}</td>
+                    <td>${item.paciente}</td>
+                    <td>${item.observacao || '-'}</td>
+                    <td>
+                        <button class="btn btn-warning" style="padding: 4px 8px; font-size: 12px;" onclick="abrirModalEditar('${item.id}')">✏️ Editar</button>
+                        <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="excluirAgendamento('${item.id}')">🗑️ Excluir</button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function abrirModalEditar(id) {
+        const item = window.agendamentosList.find(a => a.id === id);
+        if (!item) return;
+
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-data').value = item.data_atendimento;
+        document.getElementById('edit-agente').value = item.agente;
+        document.getElementById('edit-paciente').value = item.paciente;
+        document.getElementById('edit-obs').value = item.observacao || '';
+        document.getElementById('modal-editar').style.display = 'flex';
+    }
+
+    function fecharModal() {
+        document.getElementById('modal-editar').style.display = 'none';
+    }
+
+    function gerarRelatorioPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        const agenteSelecionado = document.getElementById('filtro-agente').value;
+        const termoBusca = (document.getElementById('busca-paciente-confirmado')?.value || '').toLowerCase().trim();
+
+        let listagem = window.agendamentosList || [];
+        if (agenteSelecionado !== "TODOS") {
+            listagem = listagem.filter(item => item.agente === agenteSelecionado);
+        }
+        if (termoBusca) {
+            listagem = listagem.filter(item => item.paciente.toLowerCase().includes(termoBusca));
+        }
+
+        if (listagem.length === 0) {
+            alert('Não há agendamentos para gerar o relatório PDF.');
+            return;
+        }
+
+        doc.setFontSize(18);
+        doc.setTextColor(0, 123, 255);
+        doc.text("Relatório de Pacientes Agendados", 14, 20);
+
+        doc.setFontSize(11);
+        doc.setTextColor(80, 80, 80);
+        
+        const dataHoje = new Date().toLocaleDateString('pt-BR');
+        const filtroTexto = agenteSelecionado === "TODOS" ? "Geral (Todos os Agentes)" : `Agente: ${agenteSelecionado}`;
+        
+        doc.text(`Filtro: ${filtroTexto}`, 14, 28);
+        doc.text(`Data de emissão: ${dataHoje}`, 14, 34);
+
+        const tableColumn = ["Data / Hora", "Agente de Saúde", "Paciente", "Observação"];
+        const tableRows = [];
+
+        listagem.forEach(item => {
+            tableRows.push([
+                item.data_atendimento,
+                item.agente,
+                item.paciente,
+                item.observacao || '-'
+            ]);
+        });
+
+        doc.autoTable({
+            head: [tableColumn],
+            body: tableRows,
+            startY: 40,
+            theme: 'striped',
+            headStyles: { fillColor: [0, 123, 255] },
+            styles: { fontSize: 10, cellPadding: 3 }
+        });
+
+        doc.save(agenteSelecionado === "TODOS" ? "relatorio_geral.pdf" : `relatorio_${agenteSelecionado.toLowerCase().replace(/\s+/g, '_')}.pdf`);
+    }
+
+    function baixarRelatorioTXT() {
+        const agenteSelecionado = document.getElementById('filtro-agente').value;
+        const termoBusca = (document.getElementById('busca-paciente-confirmado')?.value || '').toLowerCase().trim();
+
+        let listagem = window.agendamentosList || [];
+        if (agenteSelecionado !== "TODOS") {
+            listagem = listagem.filter(item => item.agente === agenteSelecionado);
+        }
+        if (termoBusca) {
+            listagem = listagem.filter(item => item.paciente.toLowerCase().includes(termoBusca));
+        }
+
+        if (listagem.length === 0) {
+            alert('Não há agendamentos para gerar o relatório.');
+            return;
+        }
+
+        let conteudo = "====================================================\n";
+        conteudo += "        RELATÓRIO DE PACIENTES AGENDADOS            \n";
+        conteudo += `        FILTRO: ${agenteSelecionado.toUpperCase()}\n`;
+        conteudo += "====================================================\n\n";
+
+        listagem.forEach(p => {
+            conteudo += `Data/Hora : ${p.data_atendimento}\n`;
+            conteudo += `Agente    : ${p.agente}\n`;
+            conteudo += `Paciente  : ${p.paciente}\n`;
+            if (p.observacao) conteudo += `Obs       : ${p.observacao}\n`;
+            conteudo += "----------------------------------------------------\n";
+        });
+
+        const blob = new Blob([conteudo], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `relatorio_${agenteSelecionado.toLowerCase()}.txt`;
+        a.click();
+    }
+</script>
+
+</body>
+</html>
