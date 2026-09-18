@@ -197,6 +197,10 @@
             <input type="text" id="agente" placeholder="Ex: João Silva">
         </div>
         <div class="form-group">
+            <label>WhatsApp do Agente (com DDD, apenas números):</label>
+            <input type="tel" id="telefone-agente" placeholder="Ex: 73988887777">
+        </div>
+        <div class="form-group">
             <label>Nome do Paciente:</label>
             <input type="text" id="paciente" placeholder="Ex: Maria de Souza">
         </div>
@@ -235,6 +239,7 @@
                 <thead>
                     <tr>
                         <th>Agente</th>
+                        <th>WhatsApp Agente</th>
                         <th>Paciente</th>
                         <th>Observação</th>
                         <th>Data/Hora Atendimento</th>
@@ -297,6 +302,10 @@
         <div class="form-group">
             <label>Nome do Agente:</label>
             <input type="text" id="edit-solicitacao-agente">
+        </div>
+        <div class="form-group">
+            <label>WhatsApp do Agente:</label>
+            <input type="tel" id="edit-solicitacao-telefone">
         </div>
         <div class="form-group">
             <label>Nome do Paciente:</label>
@@ -413,10 +422,12 @@
 
     window.adicionarSolicitacao = async function() {
         const agenteInput = document.getElementById('agente');
+        const telAgenteInput = document.getElementById('telefone-agente');
         const pacienteInput = document.getElementById('paciente');
         const obsInput = document.getElementById('observacao');
 
         const agente = agenteInput.value.trim();
+        const telefoneAgente = telAgenteInput.value.trim().replace(/\D/g, ''); // Apenas números
         const paciente = pacienteInput.value.trim();
         const observacao = obsInput.value.trim();
 
@@ -428,12 +439,14 @@
         try {
             await addDoc(collection(db, "solicitacoes"), {
                 agente: agente,
+                telefone_agente: telefoneAgente,
                 paciente: paciente,
                 observacao: observacao,
                 criadoEm: new Date().toISOString()
             });
             alert('Paciente salvo e sincronizado na nuvem!');
             agenteInput.value = '';
+            telAgenteInput.value = '';
             pacienteInput.value = '';
             obsInput.value = '';
         } catch (e) {
@@ -454,13 +467,29 @@
         try {
             await addDoc(collection(db, "agendamentos"), {
                 agente: item.agente,
+                telefone_agente: item.telefone_agente || '',
                 paciente: item.paciente,
                 observacao: item.observacao,
                 data_atendimento: inputData,
                 confirmadoEm: new Date().toISOString()
             });
             await deleteDoc(doc(db, "solicitacoes", id));
-            alert('Agendamento confirmado!');
+
+            // Disparo de mensagem no WhatsApp do Agente
+            if (item.telefone_agente) {
+                let numeroFormatado = item.telefone_agente;
+                if (!numeroFormatado.startsWith("55")) {
+                    numeroFormatado = "55" + numeroFormatado;
+                }
+
+                const mensagem = `Olá, *${item.agente}*!\n\nO agendamento do paciente *${item.paciente}* foi confirmado para a data: *${inputData}*.\nObservação: ${item.observacao || 'Nenhuma'}\n\n_USF MK_`;
+                const urlWhatsapp = `https://api.whatsapp.com/send?phone=${numeroFormatado}&text=${encodeURIComponent(mensagem)}`;
+                
+                window.open(urlWhatsapp, '_blank');
+            } else {
+                alert('Agendamento confirmado! (Telefone do agente não foi cadastrado para envio da mensagem).');
+            }
+
         } catch (e) {
             alert("Erro ao confirmar: " + e.message);
         }
@@ -471,6 +500,7 @@
         try {
             await updateDoc(doc(db, "solicitacoes", id), {
                 agente: document.getElementById('edit-solicitacao-agente').value.trim(),
+                telefone_agente: document.getElementById('edit-solicitacao-telefone').value.trim().replace(/\D/g, ''),
                 paciente: document.getElementById('edit-solicitacao-paciente').value.trim(),
                 observacao: document.getElementById('edit-solicitacao-obs').value.trim()
             });
@@ -562,7 +592,7 @@
         tbodyPendentes.innerHTML = '';
 
         if (!window.solicitacoesList || window.solicitacoesList.length === 0) {
-            tbodyPendentes.innerHTML = '<tr><td colspan="5">Nenhuma solicitação pendente.</td></tr>';
+            tbodyPendentes.innerHTML = '<tr><td colspan="6">Nenhuma solicitação pendente.</td></tr>';
             return;
         }
 
@@ -572,7 +602,7 @@
         );
 
         if (listagemFiltrada.length === 0) {
-            tbodyPendentes.innerHTML = '<tr><td colspan="5">Nenhum paciente encontrado com essa busca.</td></tr>';
+            tbodyPendentes.innerHTML = '<tr><td colspan="6">Nenhum paciente encontrado com essa busca.</td></tr>';
             return;
         }
 
@@ -580,6 +610,7 @@
             tbodyPendentes.innerHTML += `
                 <tr>
                     <td>${item.agente}</td>
+                    <td>${item.telefone_agente || '-'}</td>
                     <td>${item.paciente}</td>
                     <td>${item.observacao || '-'}</td>
                     <td>
@@ -587,7 +618,7 @@
                     </td>
                     <td>
                         <div class="btn-group">
-                            <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="confirmarAgendamento('${item.id}')">Confirmar</button>
+                            <button class="btn" style="padding: 4px 8px; font-size: 12px;" onclick="confirmarAgendamento('${item.id}')">Confirmar & Notificar</button>
                             <button class="btn btn-warning" style="padding: 4px 8px; font-size: 12px;" onclick="abrirModalEditarSolicitacao('${item.id}')">✏️ Editar</button>
                             <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="excluirSolicitacao('${item.id}')">🗑️ Excluir</button>
                         </div>
@@ -603,6 +634,7 @@
 
         document.getElementById('edit-solicitacao-id').value = id;
         document.getElementById('edit-solicitacao-agente').value = item.agente;
+        document.getElementById('edit-solicitacao-telefone').value = item.telefone_agente || '';
         document.getElementById('edit-solicitacao-paciente').value = item.paciente;
         document.getElementById('edit-solicitacao-obs').value = item.observacao || '';
         document.getElementById('modal-editar-solicitacao').style.display = 'flex';
