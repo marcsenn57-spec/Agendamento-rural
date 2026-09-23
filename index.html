@@ -564,6 +564,11 @@
         }
         document.getElementById(tabName).classList.add("active");
         evt.currentTarget.classList.add("active");
+        
+        // Renderiza novamente a tabela para atualizar as permissões do relatório
+        if (tabName === 'relatorios') {
+            renderizarTabelaConfirmados();
+        }
     }
 
     function autenticarADM() {
@@ -574,6 +579,7 @@
             document.getElementById('painel-adm').style.display = 'block';
             document.getElementById('senha-adm').value = '';
             renderizarTabelaPendentes();
+            renderizarTabelaConfirmados(); // Atualiza botões do relatório final
         } else {
             alert('Senha incorreta!');
         }
@@ -583,6 +589,7 @@
         isAdminAutenticado = false;
         document.getElementById('painel-login').style.display = 'block';
         document.getElementById('painel-adm').style.display = 'none';
+        renderizarTabelaConfirmados(); // Esconde botões de edição do relatório final
     }
 
     function renderizarTabelaPendentes() {
@@ -680,22 +687,27 @@
         }
 
         listagem.forEach((item) => {
+            // Controle de acesso: Apenas ADM autenticado tem ações de edição/exclusão no relatório
+            const botoesAcao = isAdminAutenticado ? `
+                <button class="btn btn-warning" style="padding: 4px 8px; font-size: 12px;" onclick="abrirModalEditar('${item.id}')">✏️ Editar</button>
+                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="excluirAgendamento('${item.id}')">🗑️ Excluir</button>
+            ` : `<span style="color: #6c757d; font-size: 12px; font-style: italic;">Apenas impressão</span>`;
+
             tbodyConfirmados.innerHTML += `
                 <tr>
                     <td><strong>${item.data_atendimento}</strong></td>
                     <td>${item.agente}</td>
                     <td>${item.paciente}</td>
                     <td>${item.observacao || '-'}</td>
-                    <td>
-                        <button class="btn btn-warning" style="padding: 4px 8px; font-size: 12px;" onclick="abrirModalEditar('${item.id}')">✏️ Editar</button>
-                        <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" onclick="excluirAgendamento('${item.id}')">🗑️ Excluir</button>
-                    </td>
+                    <td>${botoesAcao}</td>
                 </tr>
             `;
         });
     }
 
     function abrirModalEditar(id) {
+        if (!isAdminAutenticado) return;
+        
         const item = window.agendamentosList.find(a => a.id === id);
         if (!item) return;
 
